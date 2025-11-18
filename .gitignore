@@ -1,0 +1,10 @@
+]633;E;echo '# Crawler artifacts and cache';1dbcada4-3ac5-4be8-9359-304569165944]633;C# Crawler artifacts and cache
+url_crawler_twotier
+.colly_cache/
+visitedURLs_*.txt
+downloads_*.txt
+# Crawler artifacts and cache
+url_crawler_twotier
+.colly_cache/
+visitedURLs_*.txt
+downloads_*.txt
