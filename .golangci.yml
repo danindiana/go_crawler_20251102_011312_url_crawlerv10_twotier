@@ -1,0 +1,169 @@
+# golangci-lint configuration for URL Crawler v10
+# https://golangci-lint.run/usage/configuration/
+
+run:
+  # Timeout for analysis
+  timeout: 5m
+
+  # Include test files
+  tests: true
+
+  # Which dirs to skip
+  skip-dirs:
+    - bin
+    - vendor
+    - docs
+
+  # Which files to skip
+  skip-files:
+    - ".*\\.pb\\.go$"
+    - ".*_gen\\.go$"
+
+linters:
+  enable:
+    # Default linters
+    - errcheck      # Check for unchecked errors
+    - gosimple      # Simplify code
+    - govet         # Vet examines Go source code
+    - ineffassign   # Detect ineffectual assignments
+    - staticcheck   # Static analysis checks
+    - unused        # Check for unused code
+
+    # Additional recommended linters
+    - gofmt         # Enforce gofmt
+    - goimports     # Check import formatting
+    - misspell      # Find commonly misspelled words
+    - revive        # General purpose linter
+    - gosec         # Security checker
+    - bodyclose     # Check HTTP response body closed
+    - noctx         # Find sending HTTP request without context
+    - rowserrcheck  # Check SQL rows.Err is checked
+    - sqlclosecheck # Check SQL rows/statements closed
+    - unconvert     # Remove unnecessary type conversions
+    - unparam       # Find unused function parameters
+    - wastedassign  # Find wasted assignments
+    - whitespace    # Check for unnecessary whitespace
+    - gocyclo       # Check cyclomatic complexity
+    - goconst       # Find repeated strings that could be constants
+    - gocritic      # Go critic linter
+    - prealloc      # Find slice declarations that could be preallocated
+
+  disable:
+    - typecheck     # Can conflict with build tags
+    - deadcode      # Deprecated
+    - structcheck   # Deprecated
+    - varcheck      # Deprecated
+
+linters-settings:
+  errcheck:
+    # Report about assignment of errors to blank identifier
+    check-blank: true
+    # Report about not checking errors in type assertions
+    check-type-assertions: true
+
+  govet:
+    # Enable all analyzers
+    enable-all: true
+    # Disable specific analyzers
+    disable:
+      - shadow      # Can be too strict
+
+  gocyclo:
+    # Minimal cyclomatic complexity to report
+    min-complexity: 15
+
+  goconst:
+    # Minimal length of string constant
+    min-len: 3
+    # Minimum occurrences to report
+    min-occurrences: 3
+
+  misspell:
+    locale: US
+
+  revive:
+    rules:
+      - name: blank-imports
+      - name: context-as-argument
+      - name: context-keys-type
+      - name: dot-imports
+      - name: error-return
+      - name: error-strings
+      - name: error-naming
+      - name: exported
+      - name: if-return
+      - name: increment-decrement
+      - name: var-naming
+      - name: var-declaration
+      - name: package-comments
+      - name: range
+      - name: receiver-naming
+      - name: time-naming
+      - name: unexported-return
+      - name: indent-error-flow
+      - name: errorf
+      - name: empty-block
+      - name: superfluous-else
+      - name: unused-parameter
+      - name: unreachable-code
+      - name: redefines-builtin-id
+
+  gosec:
+    # To select a subset of rules to run
+    includes:
+      - G401  # Detect use of weak crypto
+      - G404  # Insecure random number source
+      - G501  # Import blocklist: crypto/md5
+      - G502  # Import blocklist: crypto/des
+      - G503  # Import blocklist: crypto/rc4
+      - G505  # Import blocklist: crypto/sha1
+
+  gofmt:
+    # Simplify code
+    simplify: true
+
+  prealloc:
+    # Report preallocation suggestions only on simple loops
+    simple: true
+    range-loops: true
+    for-loops: false
+
+issues:
+  # Maximum issues count per one linter
+  max-issues-per-linter: 0
+
+  # Maximum count of issues with the same text
+  max-same-issues: 0
+
+  # Exclude some linters from running on tests files
+  exclude-rules:
+    # Exclude some linters from running on tests files
+    - path: _test\.go
+      linters:
+        - gocyclo
+        - errcheck
+        - gosec
+        - goconst
+
+    # Exclude known false positives
+    - text: "G404: Use of weak random number generator"
+      linters:
+        - gosec
+
+    # Allow main and init functions to be more complex
+    - path: main\.go
+      linters:
+        - gocyclo
+
+  # Independently of option `exclude` golangci-lint uses default exclude patterns
+  exclude-use-default: false
+
+  # Show all issues
+  new: false
+
+output:
+  # Colored output
+  print-issued-lines: true
+  print-linter-name: true
+  uniq-by-line: false
+  sort-results: true

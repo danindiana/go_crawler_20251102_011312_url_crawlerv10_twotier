@@ -121,28 +121,28 @@ func (c *CrawlerTwoTier) setupCallbacks() {
 		if decision == tokenizer.FastPath {
 			// FAST PATH: Lightweight byte scanning
 			result := c.coordinator.ProcessFastPath(r.Body, r.Request.URL)
-			
+
 			// Process extracted URLs
 			for _, urlStr := range result.URLs {
 				c.processDiscoveredURL(urlStr, currentDepth)
 			}
-			
+
 			// Log first few fast-path results
 			fastCount, _, _ := c.coordinator.GetRoutingStats()
 			if fastCount <= 10 {
-				fmt.Printf("⚡ FAST [%d] %s → %d links in %dμs\n", 
+				fmt.Printf("⚡ FAST [%d] %s → %d links in %dμs\n",
 					currentDepth, r.Request.URL, result.LinkCount, result.ProcessingUs)
 			}
 
 		} else {
 			// SLOW PATH: Full DOM parsing + document detection
 			result := c.coordinator.ProcessSlowPath(r.Body, r.Request.URL, docExtensions)
-			
+
 			// Process extracted URLs
 			for _, urlStr := range result.URLs {
 				c.processDiscoveredURL(urlStr, currentDepth)
 			}
-			
+
 			// Process detected documents
 			for _, doc := range result.Documents {
 				if !c.downloadManager.IsDownloadedOrPending(doc.URL) {
@@ -152,13 +152,13 @@ func (c *CrawlerTwoTier) setupCallbacks() {
 						Retry:    0,
 						Priority: false,
 					}
-					
+
 					if !c.downloadManager.EnqueueTask(task) {
 						go c.downloadManager.PersistentEnqueue(task)
 					}
 				}
 			}
-			
+
 			// Log slow-path results
 			_, slowCount, _ := c.coordinator.GetRoutingStats()
 			if slowCount <= 10 {
@@ -211,7 +211,7 @@ func (c *CrawlerTwoTier) logTwoTierStats() {
 	fmt.Printf("\n╔══════════════════════════════════════════════════════════╗\n")
 	fmt.Printf("║         TWO-TIER TOKENIZER PERFORMANCE STATS           ║\n")
 	fmt.Printf("╠══════════════════════════════════════════════════════════╣\n")
-	fmt.Printf("║ FAST PATH:  %6d pages | Avg: %4dμs | Links: %7d ║\n", 
+	fmt.Printf("║ FAST PATH:  %6d pages | Avg: %4dμs | Links: %7d ║\n",
 		fastPages, fastAvgUs, fastLinks)
 	fmt.Printf("║ SLOW PATH:  %6d pages | Avg: %4dμs | Docs:  %7d ║\n",
 		slowPages, slowAvgUs, slowDocs)
@@ -252,10 +252,10 @@ func (c *CrawlerTwoTier) Start() error {
 // Wait waits for completion
 func (c *CrawlerTwoTier) Wait() {
 	c.collector.Wait()
-	
+
 	// Final stats
 	c.logTwoTierStats()
-	
+
 	if c.panicCount > 0 {
 		log.Printf("\n⚠️  Total panics recovered: %d\n", c.panicCount)
 	}
