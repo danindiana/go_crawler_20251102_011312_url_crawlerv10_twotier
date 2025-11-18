@@ -1,0 +1,206 @@
+package crawler
+
+import (
+	"fmt"
+	"net/url"
+	"os"
+	"sync"
+
+	"github.com/gocolly/colly"
+	"github.com/gocolly/colly/extensions"
+	"github.com/jeb/url_crawler/config"
+	"github.com/jeb/url_crawler/downloader"
+	"github.com/jeb/url_crawler/utils"
+)
+
+// Crawler manages the web crawling process
+type Crawler struct {
+	collector        *colly.Collector
+	visitedURLsMap   map[string]bool
+	mapMutex         *sync.RWMutex
+	firstRequestOnce sync.Once
+	startURL         string
+	logFilePath      string
+	downloadManager  *downloader.Manager
+}
+
+// NewCrawler creates a new crawler instance
+func NewCrawler(startURL, logFilePath string, downloadManager *downloader.Manager) *Crawler {
+	c := &Crawler{
+		visitedURLsMap:  make(map[string]bool),
+		mapMutex:        &sync.RWMutex{},
+		startURL:        startURL,
+		logFilePath:     logFilePath,
+		downloadManager: downloadManager,
+	}
+
+	c.collector = c.createCollector()
+	c.setupCallbacks()
+
+	return c
+}
+
+// createCollector creates an ultra-aggressive collector
+func (c *Crawler) createCollector() *colly.Collector {
+	collector := colly.NewCollector(
+		colly.UserAgent(config.UserAgent),
+		colly.Async(true),
+		colly.IgnoreRobotsTxt(),
+	)
+
+	extensions.RandomUserAgent(collector)
+	extensions.Referer(collector)
+	collector.SetRequestTimeout(config.RequestTimeout)
+
+	err := collector.Limit(&colly.LimitRule{
+		DomainGlob:  "*",
+		Parallelism: config.ConcurrentWorkers,
+		Delay:       config.PoliteDelay,
+		RandomDelay: 5,
+	})
+
+	if err != nil {
+		fmt.Printf("❌ Failed to set crawl limits: %v\n", err)
+	}
+
+	cacheDir := ".colly_cache"
+	os.RemoveAll(cacheDir)
+	collector.CacheDir = cacheDir
+
+	return collector
+}
+
+// setupCallbacks configures the crawler callbacks
+func (c *Crawler) setupCallbacks() {
+	c.collector.OnRequest(func(r *colly.Request) {
+		if r.URL.String() == c.startURL {
+			c.firstRequestOnce.Do(func() {
+				ctx := colly.NewContext()
+				ctx.Put("depth", "0")
+				r.Ctx = ctx
+				fmt.Printf("🚀 [0] Multi-NIC crawl started: %s\n", r.URL)
+			})
+		}
+	})
+
+	c.collector.OnResponse(func(r *colly.Response) {
+		// Minimal logging for performance
+		attempts, _, _, _, _ := c.downloadManager.GetStats()
+		if attempts < 50 {
+			depth := 0
+			if d := r.Ctx.Get("depth"); d != "" {
+				fmt.Sscanf(d, "%d", &depth)
+			}
+			if depth <= 1 {
+				fmt.Printf("✅ [%d] Response %d: %s\n", depth, r.StatusCode, r.Request.URL)
+			}
+		}
+	})
+
+	c.collector.OnError(func(r *colly.Response, err error) {
+		_, _, failed, _, _ := c.downloadManager.GetStats()
+		if failed < 20 {
+			fmt.Printf("❌ Crawl error: %v\n", err)
+		}
+	})
+
+	// Link discovery
+	c.collector.OnHTML("a[href]", func(e *colly.HTMLElement) {
+		href := e.Attr("href")
+		absURL := e.Request.AbsoluteURL(href)
+
+		parsed, err := url.Parse(absURL)
+		if err != nil || parsed.Host == "" {
+			return
+		}
+
+		currentDepth := 0
+		if d := e.Request.Ctx.Get("depth"); d != "" {
+			fmt.Sscanf(d, "%d", &currentDepth)
+		}
+
+		if currentDepth >= config.MaxDepth {
+			return
+		}
+
+		cleanURL := utils.NormalizeParsedURL(parsed)
+		if c.hasVisited(cleanURL) {
+			return
+		}
+
+		c.saveVisitedURL(cleanURL)
+
+		newCtx := colly.NewContext()
+		newCtx.Put("depth", fmt.Sprintf("%d", currentDepth+1))
+		e.Request.Visit(absURL)
+	})
+
+	// Document detection and queuing
+	docExtensions := []string{".pdf"}
+
+	c.collector.OnHTML("a[href]", func(e *colly.HTMLElement) {
+		href := e.Attr("href")
+		docURL := e.Request.AbsoluteURL(href)
+
+		if !utils.IsDocumentURL(docURL, docExtensions) {
+			return
+		}
+
+		depth := 0
+		if d := e.Request.Ctx.Get("depth"); d != "" {
+			fmt.Sscanf(d, "%d", &depth)
+		}
+
+		if c.downloadManager.IsDownloadedOrPending(docURL) {
+			return
+		}
+
+		task := downloader.DownloadTask{
+			URL:      docURL,
+			Depth:    depth,
+			Retry:    0,
+			Priority: false,
+		}
+
+		// Try to enqueue the task
+		if !c.downloadManager.EnqueueTask(task) {
+			// Queue full - try persistent enqueue
+			go c.downloadManager.PersistentEnqueue(task)
+		}
+	})
+}
+
+// hasVisited checks if a URL has been visited
+func (c *Crawler) hasVisited(url string) bool {
+	c.mapMutex.RLock()
+	defer c.mapMutex.RUnlock()
+	_, exists := c.visitedURLsMap[url]
+	return exists
+}
+
+// saveVisitedURL marks a URL as visited
+func (c *Crawler) saveVisitedURL(url string) {
+	c.mapMutex.Lock()
+	c.visitedURLsMap[url] = true
+	c.mapMutex.Unlock()
+
+	// Async logging for performance
+	go func() {
+		f, err := os.OpenFile(c.logFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		if err != nil {
+			return
+		}
+		defer f.Close()
+		f.WriteString(url + "\n")
+	}()
+}
+
+// Start begins the crawling process
+func (c *Crawler) Start() error {
+	return c.collector.Visit(c.startURL)
+}
+
+// Wait waits for the crawler to complete
+func (c *Crawler) Wait() {
+	c.collector.Wait()
+}
