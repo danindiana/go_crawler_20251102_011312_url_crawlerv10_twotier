@@ -1,0 +1,62 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# CI/CD
+.github
+
+# Documentation
+*.md
+docs/
+LICENSE
+
+# Build artifacts
+bin/
+*.exe
+*.dll
+*.so
+*.dylib
+url_crawler_twotier
+url_crawler
+
+# Test and coverage files
+*.test
+*.out
+coverage.out
+coverage.html
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs
+*.log
+logs/
+
+# Downloaded files and data
+downloads/
+visitedURLs.log
+*.pdf
+*.doc
+*.docx
+*.zip
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Backup files
+*.bak
+*_backup
+*_old
